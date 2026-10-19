@@ -1,0 +1,51 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:bookworm
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build pkg-config git ca-certificates \
+            libboost-all-dev libtbb-dev libcereal-dev libeigen3-dev \
+            libnlopt-dev libssh2-dev libassimp-dev \
+            libssl-dev zlib1g-dev libexpat1-dev libpng-dev \
+            libfreetype6-dev libfontconfig1-dev libgl-dev \
+            libnoise-dev libgl1-mesa-dev libglu1-mesa-dev \
+            python3
+
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSLIC3R_GUI=OFF \
+            -DSLIC3R_ALLOW_MCUT_BOOLEAN=ON \
+            -DBBL_RELEASE_TO_PUBLIC=1 \
+            -DBBL_INTERNAL_TESTING=0
+
+      - name: Build
+        run: ninja -C build -j2 multicolor-slicer
+
+      - name: Smoke test
+        run: |
+          test -x build/src/multicolor-slicer
+          build/src/multicolor-slicer --help 2>&1 | head -20
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: multicolor-slicer-linux-x64
+          path: build/src/multicolor-slicer
